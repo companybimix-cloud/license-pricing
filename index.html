@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>License Formula Sandbox</title>
+  <title>License pricing</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -14,29 +14,77 @@
   <script type="text/babel" data-presets="react">
     const { useState, useMemo } = React;
 
+    const DAYS_PER_MONTH = 30;
+    const DAYS_PER_YEAR = 365;
+
+    const RANGES = {
+      seats:      { min: 1,   max: 50,   step: 1 },
+      duration:   { min: 30,  max: 1095, step: 1 },
+      exponent:   { min: 0.5, max: 1.0,  step: 0.01 },
+      loyalty:    { min: 0,   max: 0.5,  step: 0.01 },
+      integrator: { min: 0,   max: 1.0,  step: 0.01 },
+    };
+
+    const BLEND_WEIGHT = 0.5;
+
+    const REGIONS = [
+      { id: "us-ca",       name: "US & Canada",      multiplier: 1.00 },
+      { id: "eu",          name: "Europe",           multiplier: 0.97 },
+      { id: "apac",        name: "Asia-Pacific",     multiplier: 0.94 },
+      { id: "latam",       name: "Latin America",    multiplier: 0.92 },
+      { id: "mena-africa", name: "MENA & Africa",    multiplier: 0.90 },
+    ];
+
     const DEFAULT = {
-      pluginPrices: [49, 29, 79],
+      pluginPrices: [25, 10, 12],
       nPlugins: 3,
       nSeats: 10,
       durationDays: 365,
-      alpha: 0.7,
-      beta: 0.9,
-      gamma: 0.8,
+      alpha: 0.95,
+      beta: 0.95,
+      gamma: 0.98,
       loyaltyDiscount: 0.15,
       isExisting: false,
+      regionId: "us-ca",
+      integratorMarkup: 0.20,
     };
+
+    const pluginList = [
+      { name: "MECHix Standard", price: 25 },
+      { name: "MEP Opening", price: 10 },
+      { name: "Brand Integrator", price: 12 },
+      { name: "Exporter", price: 12 },
+      { name: "Translator", price: 14 },
+    ];
+
+    const MODEL_TAGLINE = {
+      power:    "Compounding bulk discount across every axis.",
+      marginal: "Each additional unit costs slightly less than the last.",
+      blend:    "Half linear, half power-law — a safety floor.",
+    };
+
+    function Section({ label, hint, children }) {
+      return (
+        <section className="section">
+          <div className="section-label">
+            <span>{label}</span>
+            {hint && <span className="hint">{hint}</span>}
+          </div>
+          {children}
+        </section>
+      );
+    }
 
     function SliderRow({ label, value, min, max, step, onChange, format, hint, meta }) {
       return (
         <div className="slider-row">
-          <div className="slider-header">
-            <span className="slider-label">{label}</span>
-            <span className="slider-header-right">
-              {meta && <span className="slider-meta">{meta}</span>}
-              <span className="slider-value">{format ? format(value) : value}</span>
+          <div className="slider-line">
+            <span className="slider-name">{label}</span>
+            <span className="slider-right">
+              <span className="slider-readout">{format ? format(value) : value}</span>
+              {meta && <span className="slider-meta">· {meta}</span>}
             </span>
           </div>
-          {hint && <div className="slider-hint">{hint}</div>}
           <input
             type="range"
             min={min}
@@ -50,6 +98,7 @@
             <span>{format ? format(min) : min}</span>
             <span>{format ? format(max) : max}</span>
           </div>
+          {hint && <div className="slider-hint">{hint}</div>}
         </div>
       );
     }
@@ -60,35 +109,31 @@
 
       return (
         <div className="breakdown">
-          <div className="breakdown-title">Formula Breakdown — {model.name}</div>
-          <div className="breakdown-formula">
-            Total = {model.formula}{isExisting ? " × loyalty" : ""}
-          </div>
-          <div className="breakdown-rows">
+          <div className="breakdown-label">Breakdown</div>
+          <div className="breakdown-formula">{model.formula}{isExisting ? " × loyalty" : ""}</div>
+          <div className="brows">
             <div className="brow">
-              <span className="brow-label">Base (Σ plugin prices /mo)</span>
+              <span className="brow-label">Base bundle (Σ plugin prices /mo)</span>
+              <span className="brow-leader" />
               <span className="brow-val">{money(base)}</span>
             </div>
             {model.multipliers.map((m, i) => (
-              <React.Fragment key={i}>
-                <div className="brow op">×</div>
-                <div className="brow">
-                  <span className="brow-label">{m.label}</span>
-                  <span className="brow-val">{fmt(m.value)}</span>
-                </div>
-              </React.Fragment>
+              <div className="brow" key={i}>
+                <span className="brow-label">× {m.label}</span>
+                <span className="brow-leader" />
+                <span className="brow-val">{fmt(m.value)}</span>
+              </div>
             ))}
             {isExisting && (
-              <>
-                <div className="brow op">×</div>
-                <div className="brow loyalty">
-                  <span className="brow-label">Loyalty multiplier</span>
-                  <span className="brow-val">{fmt(loyalty)}</span>
-                </div>
-              </>
+              <div className="brow">
+                <span className="brow-label">× Loyalty multiplier</span>
+                <span className="brow-leader" />
+                <span className="brow-val">{fmt(loyalty)}</span>
+              </div>
             )}
             <div className="brow total">
-              <span className="brow-label">Total Price</span>
+              <span className="brow-label">Total</span>
+              <span className="brow-leader" />
               <span className="brow-val">{money(model.total)}</span>
             </div>
           </div>
@@ -96,56 +141,30 @@
       );
     }
 
-    function VariationsCard({ models, linearTotal, activeKey, onSelect }) {
+    function ModelCard({ model, linearTotal, isActive, onClick }) {
+      const off = linearTotal > 0 ? ((1 - model.total / linearTotal) * 100).toFixed(1) : "0.0";
       const money = (n) => "$" + n.toFixed(2);
+
       return (
-        <div className="card variations-card full-span">
-          <div className="card-title">Pricing Models — click to apply</div>
-          <div className="variations-grid">
-            {models.map((m) => {
-              const off = linearTotal > 0 ? (1 - m.total / linearTotal) * 100 : 0;
-              const isActive = m.key === activeKey;
-              return (
-                <div
-                  key={m.key}
-                  className={`variation-row clickable ${isActive ? "current" : ""}`}
-                  onClick={() => onSelect(m.key)}
-                >
-                  <div className="variation-head">
-                    <span className="variation-name">
-                      {m.name}
-                      {isActive && <span className="variation-tag">active</span>}
-                    </span>
-                    <span className="variation-total">{money(m.total)}</span>
-                  </div>
-                  <div className="variation-off-row">
-                    <span className="variation-off">{off.toFixed(1)}% vs linear</span>
-                  </div>
-                  <p className="variation-description">{m.description}</p>
-                  <div className="variation-callouts">
-                    <div className="callout good">
-                      <span className="callout-tag">Good for</span>
-                      <span className="callout-text">{m.good}</span>
-                    </div>
-                    <div className="callout risk">
-                      <span className="callout-tag">Watch out</span>
-                      <span className="callout-text">{m.risk}</span>
-                    </div>
-                  </div>
-                  <div className="variation-formula"><span className="formula-tag">math</span>{m.formula}</div>
-                </div>
-              );
-            })}
-            <div className="variation-row baseline">
-              <div className="variation-head">
-                <span className="variation-name">Linear baseline (no discount)</span>
-                <span className="variation-total">{money(linearTotal)}</span>
-              </div>
-              <p className="variation-description">What the customer would pay with no bulk discount at all — every plugin, seat, and month at full list price. The headline number you compare savings against.</p>
-              <div className="variation-formula"><span className="formula-tag">math</span>base × N_seats × months</div>
+        <article className={`model-card ${isActive ? "active" : ""}`} onClick={onClick}>
+          {isActive && <span className="model-active-tag">Selected</span>}
+          <div className="model-name">{model.name.split(" (")[0]}</div>
+          <div className="model-tagline">{MODEL_TAGLINE[model.key]}</div>
+          <div className="model-price">{money(model.total)}</div>
+          <div className="model-vs">−{off}% vs. linear</div>
+          <p className="model-desc">{model.description}</p>
+          <div className="model-callouts">
+            <div className="callout good">
+              <span className="callout-tag">For</span>
+              <span className="callout-text">{model.good}</span>
+            </div>
+            <div className="callout risk">
+              <span className="callout-tag">Catch</span>
+              <span className="callout-text">{model.risk}</span>
             </div>
           </div>
-        </div>
+          <div className="model-formula">{model.formula}</div>
+        </article>
       );
     }
 
@@ -156,35 +175,31 @@
       const update = (key) => (val) => setP((prev) => ({ ...prev, [key]: val }));
 
       const calc = useMemo(() => {
-        const base = p.pluginPrices.slice(0, p.nPlugins).reduce((a, b) => a + b, 0);
-        const months = p.durationDays / 30;
+        const region = REGIONS.find(r => r.id === p.regionId) ?? REGIONS[0];
+        const baseRaw = p.pluginPrices.slice(0, p.nPlugins).reduce((a, b) => a + b, 0);
+        const base = baseRaw * region.multiplier;
+        const months = p.durationDays / DAYS_PER_MONTH;
         const loyalty = p.isExisting ? 1 - p.loyaltyDiscount : 1;
 
-        // Model A — Power (current, multiplicative)
         const fPlugins = Math.pow(p.nPlugins, p.alpha - 1);
         const gSeats = Math.pow(p.nSeats, p.beta);
         const hDuration = Math.pow(months, p.gamma);
         const total = base * fPlugins * gSeats * hDuration * loyalty;
 
-        // Linear baseline
         const linearTotal = base * p.nSeats * months;
-        const saving = linearTotal > 0 ? ((1 - total / linearTotal) * 100) : 0;
 
-        // Σ_{i=1..N} i^exp — marginal sum
         const sumPow = (N, exp) => {
           let s = 0;
           for (let i = 1; i <= N; i++) s += Math.pow(i, exp);
           return s;
         };
 
-        // Model B — Marginal tiered (declining unit price)
         const seatsMarg = sumPow(p.nSeats, p.beta - 1);
         const monthsMarg = p.gamma > 0 ? Math.pow(months, p.gamma) / p.gamma : months;
         const pluginsMarg = sumPow(p.nPlugins, p.alpha - 1) / p.nPlugins;
         const totalMarginal = base * pluginsMarg * seatsMarg * monthsMarg * loyalty;
 
-        // Model C — Linear-power blend (50/50)
-        const W = 0.5;
+        const W = BLEND_WEIGHT;
         const seatsBlend = W * p.nSeats + (1 - W) * Math.pow(p.nSeats, p.beta);
         const monthsBlend = W * months + (1 - W) * Math.pow(months, p.gamma);
         const pluginsBlend = W + (1 - W) * Math.pow(p.nPlugins, p.alpha - 1);
@@ -201,13 +216,13 @@
               { label: "g(seats) = N^β", value: gSeats },
               { label: "h(months) = months^γ", value: hDuration },
             ],
-            description: "Each lever — plugins, seats, and license length — has its own bulk discount, and the discounts multiply together. A customer who grows on every axis at once gets a deeply compounded deal: more plugins AND more seats AND a longer term stack into a single steep price drop.",
+            description: "Each lever — plugins, seats, and license length — has its own bulk discount, and the discounts multiply together. A customer who grows on every axis at once gets a deeply compounded deal.",
             good: "Rewards customers who buy the full package. Marketing-friendly headline savings.",
-            risk: "If any one knob is set too aggressively, a big customer ordering 'more of everything' can end up paying less than a smaller customer who only scaled on one axis.",
+            risk: "Aggressive tuning can let a big multi-axis order undercut a smaller single-axis one.",
           },
           marginal: {
             key: "marginal",
-            name: "Marginal tiered (declining unit price)",
+            name: "Marginal tiered",
             formula: "Base × avg_p × Σ i^(β−1) × months^γ ⁄ γ",
             total: totalMarginal,
             multipliers: [
@@ -215,13 +230,13 @@
               { label: "seats = Σ i^(β−1)", value: seatsMarg },
               { label: "months = months^γ ⁄ γ", value: monthsMarg },
             ],
-            description: "Like a punch card. The first plugin, seat, and month are charged at full list price. Each next one costs a bit less than the one before — the exponents control how steep that per-unit drop is. Total = sum of per-unit prices, not a flat multiplier.",
-            good: "A bigger order always costs more than a smaller order — the math literally cannot flip. Easy to defend in a sales conversation: 'every additional seat is cheaper than the last'.",
-            risk: "Discounts feel less dramatic at large scale than the power model. Headline savings numbers will be smaller.",
+            description: "Like a punch card. Each next unit costs a bit less than the one before. Total = sum of per-unit prices, not a flat multiplier.",
+            good: "A bigger order always costs more than a smaller one. Easy to defend in a sales conversation.",
+            risk: "Discounts feel less dramatic at scale. Headline savings shrink.",
           },
           blend: {
             key: "blend",
-            name: "Linear-power blend (50/50)",
+            name: "Linear-power blend",
             formula: "Base × ½(1 + N_p^(α−1)) × ½(N_s + N_s^β) × ½(M + M^γ)",
             total: totalBlend,
             multipliers: [
@@ -229,762 +244,999 @@
               { label: "seats = ½(N + N^β)", value: seatsBlend },
               { label: "months = ½(M + M^γ)", value: monthsBlend },
             ],
-            description: "Splits every price in half. One half scales straight per-unit (1 seat = X, 2 seats = 2X — no discount). The other half gets the full power-law bulk discount. The linear half acts as a safety floor under the discount.",
-            good: "Most conservative of the three. No matter how aggressive you tune the discounts, a customer with more units always pays more than one with fewer. Zero pricing surprises.",
-            risk: "Smaller savings for large customers — the discount only applies to half the price, so the headline 'X% off' numbers shrink.",
+            description: "Splits every price in half. One half scales straight per-unit. The other half gets the full power-law discount. Linear half acts as a safety floor.",
+            good: "Most conservative. More units always cost more — zero pricing surprises.",
+            risk: "Smaller savings for large customers — discount only applies to half the price.",
           },
         };
 
         return {
-          base, months, loyalty, linearTotal, saving,
+          base, baseRaw, region, months, loyalty, linearTotal,
           fPlugins, gSeats, hDuration, total, totalMarginal, totalBlend,
+          integratorMarkup: p.integratorMarkup,
           models,
         };
       }, [p]);
 
-      const pluginList = [
-        { name: "Linked Copier", price: 49 },
-        { name: "Room Book", price: 29 },
-        { name: "Room Finishing", price: 79 },
-        { name: "Exporter", price: 99 },
-        { name: "Translator", price: 19 },
-      ];
+      const activeModel = calc.models[modelKey];
+      const savingPct = calc.linearTotal > 0
+        ? ((1 - activeModel.total / calc.linearTotal) * 100)
+        : 0;
+      const customerTotal = activeModel.total * (1 + calc.integratorMarkup);
 
       return (
         <>
           <style>{`
-            @import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
+            :root {
+              --bg:             #FAFAF7;
+              --surface:        #FFFFFF;
+              --surface-2:      #F4F3EE;
+              --ink:            #18181B;
+              --ink-2:          #3F3F46;
+              --ink-3:          #71717A;
+              --ink-4:          #A1A1AA;
+              --border:         #E7E5E0;
+              --border-strong:  #D4D4CC;
+              --soft:           #F0EFEA;
+            }
 
             *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-            body {
-              background: #0a0a0f;
-              color: #e8e4dc;
-              font-family: 'Syne', sans-serif;
-              min-height: 100vh;
+            html, body {
+              background: var(--bg);
+              color: var(--ink);
+              font-family: 'Geist', system-ui, -apple-system, sans-serif;
+              font-size: 15px;
+              line-height: 1.55;
+              -webkit-font-smoothing: antialiased;
+              text-rendering: optimizeLegibility;
+              font-feature-settings: "ss01", "cv11";
             }
 
-            .app {
-              max-width: 960px;
+            body { min-height: 100vh; }
+
+            ::selection { background: var(--ink); color: var(--bg); }
+
+            .page {
+              max-width: 1080px;
               margin: 0 auto;
-              padding: 48px 24px;
+              padding: 72px 32px 96px;
             }
 
+            @media (max-width: 720px) {
+              .page { padding: 36px 20px 72px; }
+            }
+
+            /* ─── Header ─────────────────────────────────── */
             .header {
-              margin-bottom: 48px;
+              margin-bottom: 64px;
+              max-width: 640px;
             }
 
-            .header-eyebrow {
+            .header-meta {
               font-family: 'JetBrains Mono', monospace;
               font-size: 11px;
-              letter-spacing: 0.2em;
-              color: #7c6af0;
+              letter-spacing: 0.06em;
+              color: var(--ink-3);
               text-transform: uppercase;
-              margin-bottom: 12px;
+              margin-bottom: 16px;
             }
 
             .header-title {
-              font-size: clamp(28px, 5vw, 48px);
-              font-weight: 800;
-              line-height: 1.05;
-              color: #f5f0e8;
+              font-size: clamp(28px, 4vw, 36px);
+              font-weight: 500;
+              letter-spacing: -0.025em;
+              line-height: 1.15;
+              color: var(--ink);
+              margin-bottom: 8px;
             }
 
-            .header-title span {
-              color: #7c6af0;
+            .header-sub {
+              font-size: 16px;
+              font-weight: 400;
+              color: var(--ink-3);
+              line-height: 1.55;
             }
 
+            /* ─── Layout grid ─────────────────────────────────── */
             .grid {
               display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 20px;
+              grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+              gap: 64px;
+              align-items: start;
             }
 
-            @media (max-width: 640px) {
-              .grid { grid-template-columns: 1fr; }
+            @media (max-width: 900px) {
+              .grid { grid-template-columns: 1fr; gap: 32px; }
             }
 
-            .card {
-              background: #111118;
-              border: 1px solid #1e1e2e;
-              border-radius: 12px;
-              padding: 24px;
-            }
+            .col-config { min-width: 0; }
+            .col-result { min-width: 0; }
 
-            .card-title {
-              font-size: 11px;
-              font-family: 'JetBrains Mono', monospace;
-              letter-spacing: 0.15em;
-              text-transform: uppercase;
-              color: #7c6af0;
-              margin-bottom: 20px;
+            /* ─── Section ─────────────────────────────────── */
+            .section {
+              margin-bottom: 36px;
             }
+            .section:last-child { margin-bottom: 0; }
 
-            .slider-row {
-              margin-bottom: 22px;
-            }
-
-            .slider-header {
+            .section-label {
               display: flex;
               justify-content: space-between;
               align-items: baseline;
-              margin-bottom: 4px;
+              font-size: 13px;
+              font-weight: 500;
+              color: var(--ink-2);
+              margin-bottom: 16px;
+              letter-spacing: 0;
             }
 
-            .slider-label {
-              font-size: 14px;
-              font-weight: 600;
-              color: #c8c0b4;
+            .section-label .hint {
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 11px;
+              color: var(--ink-4);
+              font-weight: 400;
             }
 
-            .slider-header-right {
-              display: inline-flex;
+            /* ─── Region ─────────────────────────────────── */
+            .region-list {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
               gap: 6px;
-              align-items: center;
             }
 
-            .slider-value {
+            .region-option {
+              background: var(--surface);
+              border: 1px solid var(--border);
+              border-radius: 8px;
+              padding: 10px 12px;
+              cursor: pointer;
+              text-align: left;
+              display: flex;
+              flex-direction: column;
+              gap: 3px;
+              font-family: inherit;
+              transition: border-color 0.15s, background 0.15s;
+              color: var(--ink);
+            }
+
+            .region-option:hover { border-color: var(--ink-4); }
+
+            .region-option.active {
+              background: var(--ink);
+              border-color: var(--ink);
+              color: var(--bg);
+            }
+
+            .region-option-name {
+              font-size: 13px;
+              font-weight: 500;
+            }
+
+            .region-option-rate {
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 11px;
+              color: var(--ink-3);
+            }
+
+            .region-option.active .region-option-rate { color: var(--ink-4); }
+
+            /* ─── Plugins ─────────────────────────────────── */
+            .plugin-list {
+              display: flex;
+              flex-direction: column;
+              gap: 6px;
+            }
+
+            .plugin-chip {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 11px 14px;
+              background: var(--surface);
+              border: 1px solid var(--border);
+              border-radius: 8px;
+              cursor: pointer;
+              user-select: none;
+              transition: border-color 0.15s, background 0.15s;
+              color: var(--ink);
+            }
+
+            .plugin-chip:hover { border-color: var(--ink-4); }
+
+            .plugin-chip.active {
+              background: var(--ink);
+              border-color: var(--ink);
+              color: var(--bg);
+            }
+
+            .plugin-chip-name {
+              font-size: 14px;
+              font-weight: 500;
+            }
+
+            .plugin-chip-price {
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 12px;
+              color: var(--ink-3);
+            }
+
+            .plugin-chip.active .plugin-chip-price { color: var(--ink-4); }
+
+            /* ─── Slider ─────────────────────────────────── */
+            .slider-row {
+              margin-bottom: 22px;
+            }
+            .slider-row:last-child { margin-bottom: 4px; }
+
+            .slider-line {
+              display: flex;
+              justify-content: space-between;
+              align-items: baseline;
+              gap: 12px;
+              margin-bottom: 8px;
+            }
+
+            .slider-name {
+              font-size: 14px;
+              font-weight: 500;
+              color: var(--ink);
+            }
+
+            .slider-right { display: inline-flex; gap: 4px; align-items: baseline; }
+
+            .slider-readout {
               font-family: 'JetBrains Mono', monospace;
               font-size: 13px;
-              color: #f5f0e8;
-              background: #1e1e2e;
-              padding: 2px 8px;
-              border-radius: 4px;
+              color: var(--ink);
+              font-weight: 500;
+              font-variant-numeric: tabular-nums lining-nums;
             }
 
             .slider-meta {
               font-family: 'JetBrains Mono', monospace;
               font-size: 11px;
-              color: #6ee0a8;
-              background: #6ee0a815;
-              border: 1px solid #6ee0a833;
-              padding: 1px 6px;
-              border-radius: 4px;
-            }
-
-            .slider-hint {
-              font-size: 11px;
-              color: #4a4a5e;
-              font-family: 'JetBrains Mono', monospace;
-              margin-bottom: 6px;
+              color: var(--ink-3);
             }
 
             .slider {
               width: 100%;
               -webkit-appearance: none;
-              height: 3px;
-              background: linear-gradient(to right, #7c6af0, #1e1e2e);
-              border-radius: 2px;
+              appearance: none;
+              height: 2px;
+              background: var(--border-strong);
               outline: none;
               cursor: pointer;
+              border-radius: 1px;
             }
 
             .slider::-webkit-slider-thumb {
               -webkit-appearance: none;
-              width: 16px;
-              height: 16px;
-              background: #7c6af0;
+              appearance: none;
+              width: 14px;
+              height: 14px;
+              background: var(--ink);
+              border: none;
               border-radius: 50%;
-              box-shadow: 0 0 0 3px #0a0a0f, 0 0 0 5px #7c6af055;
-              transition: box-shadow 0.15s;
+              cursor: grab;
+              transition: transform 0.15s;
             }
 
-            .slider::-webkit-slider-thumb:hover {
-              box-shadow: 0 0 0 3px #0a0a0f, 0 0 0 7px #7c6af088;
+            .slider:hover::-webkit-slider-thumb { transform: scale(1.15); }
+            .slider:active::-webkit-slider-thumb { cursor: grabbing; transform: scale(1.15); }
+
+            .slider::-moz-range-thumb {
+              width: 14px;
+              height: 14px;
+              background: var(--ink);
+              border: none;
+              border-radius: 50%;
+              cursor: grab;
             }
 
             .slider-bounds {
               display: flex;
               justify-content: space-between;
               font-family: 'JetBrains Mono', monospace;
-              font-size: 10px;
-              color: #3a3a4e;
-              margin-top: 4px;
+              font-size: 11px;
+              color: var(--ink-4);
+              margin-top: 6px;
             }
 
-            .plugin-selector {
-              display: flex;
-              flex-direction: column;
-              gap: 8px;
-              margin-bottom: 8px;
+            .slider-hint {
+              font-size: 12.5px;
+              color: var(--ink-3);
+              margin-top: 6px;
+              line-height: 1.45;
             }
 
-            .plugin-chip {
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              padding: 10px 14px;
-              border-radius: 8px;
-              border: 1px solid #1e1e2e;
-              background: #0a0a0f;
-              cursor: pointer;
-              transition: all 0.15s;
-              user-select: none;
+            /* ─── Adjustments groups ─────────────────────────────────── */
+            .adj-group {
+              margin-bottom: 24px;
             }
+            .adj-group:last-child { margin-bottom: 0; }
 
-            .plugin-chip.active {
-              border-color: #7c6af0;
-              background: #7c6af015;
-            }
-
-            .plugin-chip-name {
-              font-size: 13px;
-              font-weight: 600;
-              color: #c8c0b4;
-            }
-
-            .plugin-chip.active .plugin-chip-name {
-              color: #e8e4dc;
-            }
-
-            .plugin-chip-price {
+            .adj-group-label {
               font-family: 'JetBrains Mono', monospace;
-              font-size: 12px;
-              color: #4a4a5e;
-            }
-
-            .plugin-chip.active .plugin-chip-price {
-              color: #7c6af0;
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              color: var(--ink-3);
+              margin-bottom: 12px;
             }
 
             .toggle-row {
               display: flex;
-              align-items: center;
               justify-content: space-between;
-              padding: 12px 0;
-              border-top: 1px solid #1e1e2e;
-              margin-top: 8px;
+              align-items: center;
+              padding: 12px 0 0;
+              margin-top: 4px;
             }
 
             .toggle-label {
               font-size: 14px;
-              font-weight: 600;
-              color: #c8c0b4;
+              font-weight: 500;
+              color: var(--ink);
             }
 
             .toggle {
-              width: 40px;
-              height: 22px;
-              background: #1e1e2e;
-              border-radius: 11px;
+              width: 36px;
+              height: 20px;
+              background: var(--border-strong);
+              border-radius: 10px;
               position: relative;
               cursor: pointer;
               transition: background 0.2s;
+              flex: 0 0 auto;
             }
 
-            .toggle.on {
-              background: #7c6af0;
-            }
+            .toggle.on { background: var(--ink); }
 
             .toggle-knob {
               position: absolute;
-              top: 3px;
-              left: 3px;
+              top: 2px;
+              left: 2px;
               width: 16px;
               height: 16px;
-              background: white;
+              background: var(--bg);
               border-radius: 50%;
               transition: transform 0.2s;
+              box-shadow: 0 1px 2px rgba(0,0,0,0.1);
             }
 
-            .toggle.on .toggle-knob {
-              transform: translateX(18px);
+            .toggle.on .toggle-knob { transform: translateX(16px); }
+
+            /* ─── Result card ─────────────────────────────────── */
+            .result {
+              position: sticky;
+              top: 24px;
+              background: var(--surface);
+              border: 1px solid var(--border);
+              border-radius: 14px;
+              padding: 28px 28px 24px;
             }
 
-            .result-card {
-              background: linear-gradient(135deg, #13131f, #1a1228);
-              border: 1px solid #7c6af044;
-              border-radius: 12px;
-              padding: 28px;
-              margin-top: 20px;
-              position: relative;
-              overflow: hidden;
+            @media (max-width: 900px) {
+              .result { position: static; }
             }
 
-            .result-card::before {
-              content: '';
-              position: absolute;
-              top: -40px;
-              right: -40px;
-              width: 120px;
-              height: 120px;
-              background: radial-gradient(circle, #7c6af022, transparent 70%);
-              border-radius: 50%;
+            .result-tabs {
+              display: flex;
+              gap: 2px;
+              background: var(--soft);
+              border-radius: 8px;
+              padding: 3px;
+              margin-bottom: 28px;
             }
 
-            .result-price {
-              font-size: clamp(36px, 6vw, 56px);
-              font-weight: 800;
-              color: #f5f0e8;
-              line-height: 1;
-              margin-bottom: 8px;
-            }
-
-            .result-price span {
-              color: #7c6af0;
-              font-size: 0.6em;
-              vertical-align: super;
-            }
-
-            .result-sub {
-              font-family: 'JetBrains Mono', monospace;
-              font-size: 11px;
-              color: #4a4a5e;
-              margin-bottom: 20px;
-            }
-
-            .saving-badge {
-              display: inline-flex;
-              align-items: center;
-              gap: 6px;
-              background: #7c6af022;
-              border: 1px solid #7c6af044;
+            .result-tab {
+              flex: 1;
+              background: transparent;
+              border: none;
+              padding: 7px 8px;
+              font-family: inherit;
+              font-size: 12px;
+              font-weight: 500;
+              color: var(--ink-3);
               border-radius: 6px;
-              padding: 5px 10px;
-              font-family: 'JetBrains Mono', monospace;
-              font-size: 11px;
-              color: #a89af0;
+              cursor: pointer;
+              transition: all 0.15s;
+              text-transform: capitalize;
             }
 
+            .result-tab:hover { color: var(--ink); }
+
+            .result-tab.active {
+              background: var(--surface);
+              color: var(--ink);
+              box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0,0,0,0.03);
+            }
+
+            .result-label {
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 11px;
+              color: var(--ink-3);
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              margin-bottom: 6px;
+            }
+
+            .result-total {
+              font-size: clamp(40px, 6vw, 56px);
+              font-weight: 500;
+              letter-spacing: -0.035em;
+              color: var(--ink);
+              font-variant-numeric: tabular-nums lining-nums;
+              line-height: 1;
+            }
+
+            .result-total .currency {
+              color: var(--ink-3);
+              font-weight: 400;
+              margin-right: 2px;
+            }
+
+            .result-context {
+              font-size: 13.5px;
+              color: var(--ink-3);
+              margin-top: 10px;
+              padding-bottom: 18px;
+              border-bottom: 1px solid var(--border);
+              line-height: 1.5;
+            }
+
+            .result-context .name {
+              color: var(--ink);
+              font-weight: 500;
+            }
+
+            .result-row {
+              display: flex;
+              justify-content: space-between;
+              align-items: baseline;
+              padding: 11px 0;
+              font-size: 14px;
+              border-bottom: 1px solid var(--border);
+              gap: 12px;
+            }
+            .result-row:last-of-type { border-bottom: none; }
+
+            .result-row-label {
+              color: var(--ink-3);
+              line-height: 1.4;
+            }
+            .result-row-label .small {
+              display: block;
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 11px;
+              color: var(--ink-4);
+              margin-top: 2px;
+            }
+
+            .result-row-val {
+              font-family: 'JetBrains Mono', monospace;
+              color: var(--ink);
+              font-weight: 500;
+              font-variant-numeric: tabular-nums lining-nums;
+              flex: 0 0 auto;
+            }
+
+            .result-row.customer .result-row-val {
+              font-family: 'Geist', sans-serif;
+              font-size: 18px;
+              font-weight: 600;
+              letter-spacing: -0.02em;
+            }
+
+            /* ─── Breakdown ─────────────────────────────────── */
             .breakdown {
               margin-top: 24px;
-              padding-top: 24px;
-              border-top: 1px solid #1e1e2e;
+              padding-top: 20px;
+              border-top: 1px solid var(--border);
             }
 
-            .breakdown-title {
-              font-size: 11px;
+            .breakdown-label {
               font-family: 'JetBrains Mono', monospace;
-              letter-spacing: 0.15em;
+              font-size: 11px;
               text-transform: uppercase;
-              color: #4a4a5e;
-              margin-bottom: 12px;
+              letter-spacing: 0.08em;
+              color: var(--ink-3);
+              margin-bottom: 8px;
             }
 
             .breakdown-formula {
               font-family: 'JetBrains Mono', monospace;
-              font-size: 12px;
-              color: #7c6af0;
-              background: #0a0a0f;
-              border: 1px solid #1e1e2e;
-              border-radius: 6px;
-              padding: 10px 14px;
-              margin-bottom: 16px;
+              font-size: 11.5px;
+              color: var(--ink-2);
+              line-height: 1.55;
+              padding-bottom: 14px;
+              margin-bottom: 8px;
+              border-bottom: 1px solid var(--border);
+              word-break: break-word;
             }
 
-            .breakdown-rows {
+            .brows {
               display: flex;
               flex-direction: column;
-              gap: 4px;
             }
 
             .brow {
               display: flex;
-              justify-content: space-between;
-              align-items: center;
-              padding: 6px 10px;
-              border-radius: 6px;
-              background: #0f0f18;
-            }
-
-            .brow.op {
-              background: transparent;
-              justify-content: flex-start;
-              padding: 0 10px;
-              font-size: 16px;
-              color: #3a3a4e;
-            }
-
-            .brow.loyalty {
-              background: #7c6af011;
-              border: 1px solid #7c6af033;
-            }
-
-            .brow.total {
-              background: #7c6af018;
-              border: 1px solid #7c6af055;
-              margin-top: 8px;
-              padding: 10px 14px;
+              align-items: baseline;
+              padding: 7px 0;
+              gap: 6px;
+              font-size: 13px;
             }
 
             .brow-label {
-              font-family: 'JetBrains Mono', monospace;
-              font-size: 11px;
-              color: #6a6a7e;
+              color: var(--ink-2);
+              flex: 0 0 auto;
+              max-width: 65%;
             }
 
-            .brow.total .brow-label {
-              color: #a89af0;
-              font-weight: 500;
+            .brow-leader {
+              flex: 1 1 12px;
+              border-bottom: 1px dotted var(--border-strong);
+              height: 1px;
+              transform: translateY(-3px);
+              min-width: 12px;
             }
 
             .brow-val {
               font-family: 'JetBrains Mono', monospace;
               font-size: 12px;
-              color: #c8c0b4;
+              color: var(--ink);
+              font-weight: 500;
+              font-variant-numeric: tabular-nums lining-nums;
+              flex: 0 0 auto;
+            }
+
+            .brow.total {
+              border-top: 1px solid var(--border);
+              padding: 12px 0 0;
+              margin-top: 6px;
+            }
+
+            .brow.total .brow-label {
+              color: var(--ink);
+              font-weight: 600;
+              font-family: 'Geist', sans-serif;
+              font-size: 14px;
             }
 
             .brow.total .brow-val {
-              color: #f5f0e8;
-              font-size: 14px;
-              font-weight: 500;
-            }
-
-            .full-span {
-              grid-column: 1 / -1;
-            }
-
-            .variations-card {
-              margin-top: 4px;
-            }
-
-            .variations-grid {
-              display: flex;
-              flex-direction: column;
-              gap: 10px;
-            }
-
-            .variation-row {
-              background: #0f0f18;
-              border: 1px solid #1e1e2e;
-              border-radius: 8px;
-              padding: 12px 14px;
-            }
-
-            .variation-row.clickable {
-              cursor: pointer;
-              transition: border-color 0.15s, background 0.15s;
-            }
-
-            .variation-row.clickable:hover {
-              border-color: #3a3a4e;
-            }
-
-            .variation-row.current {
-              border-color: #7c6af055;
-              background: #7c6af00a;
-            }
-
-            .variation-row.current.clickable:hover {
-              border-color: #7c6af088;
-            }
-
-            .model-selector {
-              display: inline-flex;
-              background: #0a0a0f;
-              border: 1px solid #1e1e2e;
-              border-radius: 8px;
-              padding: 3px;
-              gap: 2px;
-              margin-bottom: 16px;
-            }
-
-            .model-option {
-              font-family: 'JetBrains Mono', monospace;
-              font-size: 11px;
-              letter-spacing: 0.08em;
-              text-transform: uppercase;
-              color: #6a6a7e;
-              padding: 6px 14px;
-              border-radius: 6px;
-              cursor: pointer;
-              transition: all 0.15s;
-              user-select: none;
-              border: none;
-              background: transparent;
+              color: var(--ink);
               font-weight: 600;
+              font-size: 14px;
             }
 
-            .model-option:hover {
-              color: #c8c0b4;
+            /* ─── Models comparison ─────────────────────────────────── */
+            .models {
+              margin-top: 80px;
+              padding-top: 40px;
+              border-top: 1px solid var(--border);
             }
 
-            .model-option.active {
-              background: #7c6af022;
-              color: #f5f0e8;
-            }
-
-            .variation-row.baseline {
-              background: transparent;
-              border: 1px dashed #1e1e2e;
-            }
-
-            .variation-head {
+            .models-header {
+              margin-bottom: 24px;
               display: flex;
               justify-content: space-between;
               align-items: baseline;
+              flex-wrap: wrap;
+              gap: 12px;
+            }
+
+            .models-title {
+              font-size: 22px;
+              font-weight: 500;
+              letter-spacing: -0.02em;
+              color: var(--ink);
+            }
+
+            .models-sub {
+              font-size: 13px;
+              color: var(--ink-3);
+            }
+
+            .models-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr 1fr;
+              gap: 12px;
+            }
+
+            @media (max-width: 900px) {
+              .models-grid { grid-template-columns: 1fr; }
+            }
+
+            .model-card {
+              background: var(--surface);
+              border: 1px solid var(--border);
+              border-radius: 14px;
+              padding: 24px;
+              cursor: pointer;
+              transition: border-color 0.15s;
+              display: flex;
+              flex-direction: column;
+            }
+
+            .model-card:hover { border-color: var(--ink-4); }
+
+            .model-card.active {
+              border-color: var(--ink);
+            }
+
+            .model-active-tag {
+              display: inline-block;
+              align-self: flex-start;
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 10px;
+              color: var(--bg);
+              font-weight: 500;
+              background: var(--ink);
+              padding: 3px 8px;
+              border-radius: 4px;
+              margin-bottom: 12px;
+              letter-spacing: 0.06em;
+              text-transform: uppercase;
+            }
+
+            .model-name {
+              font-size: 18px;
+              font-weight: 500;
+              letter-spacing: -0.015em;
               margin-bottom: 4px;
             }
 
-            .variation-name {
+            .model-tagline {
               font-size: 13px;
-              font-weight: 600;
-              color: #c8c0b4;
-              display: inline-flex;
-              align-items: center;
-              gap: 8px;
+              color: var(--ink-3);
+              margin-bottom: 20px;
+              line-height: 1.5;
             }
 
-            .variation-tag {
-              font-family: 'JetBrains Mono', monospace;
-              font-size: 9px;
-              letter-spacing: 0.1em;
-              text-transform: uppercase;
-              color: #7c6af0;
-              background: #7c6af018;
-              border: 1px solid #7c6af044;
-              padding: 1px 6px;
-              border-radius: 3px;
+            .model-price {
+              font-size: 28px;
+              font-weight: 500;
+              letter-spacing: -0.025em;
+              font-variant-numeric: tabular-nums lining-nums;
+              margin-bottom: 4px;
+              line-height: 1;
             }
 
-            .variation-total {
-              font-family: 'JetBrains Mono', monospace;
-              font-size: 14px;
-              color: #f5f0e8;
-            }
-
-            .variation-off-row {
-              margin-bottom: 10px;
-            }
-
-            .variation-off {
-              display: inline-block;
+            .model-vs {
               font-family: 'JetBrains Mono', monospace;
               font-size: 11px;
-              color: #6ee0a8;
-              background: #6ee0a815;
-              border: 1px solid #6ee0a833;
-              padding: 2px 8px;
-              border-radius: 4px;
+              color: var(--ink-3);
+              margin-bottom: 20px;
             }
 
-            .variation-description {
-              font-size: 13px;
-              line-height: 1.55;
-              color: #c8c0b4;
-              margin: 0 0 12px 0;
+            .model-desc {
+              font-size: 13.5px;
+              color: var(--ink-2);
+              line-height: 1.6;
+              margin-bottom: 18px;
             }
 
-            .variation-callouts {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 8px;
-              margin-bottom: 12px;
-            }
-
-            @media (max-width: 640px) {
-              .variation-callouts { grid-template-columns: 1fr; }
+            .model-callouts {
+              display: flex;
+              flex-direction: column;
+              gap: 12px;
+              margin-bottom: 18px;
             }
 
             .callout {
-              padding: 8px 10px;
-              border-radius: 6px;
-              border: 1px solid #1e1e2e;
-              background: #0a0a0f;
               display: flex;
-              flex-direction: column;
-              gap: 4px;
-            }
-
-            .callout.good {
-              border-color: #6ee0a833;
-              background: #6ee0a808;
-            }
-
-            .callout.risk {
-              border-color: #e0a86e33;
-              background: #e0a86e08;
+              gap: 10px;
+              font-size: 13px;
+              line-height: 1.55;
             }
 
             .callout-tag {
               font-family: 'JetBrains Mono', monospace;
-              font-size: 9px;
-              letter-spacing: 0.12em;
+              font-size: 11px;
+              color: var(--ink-3);
+              flex: 0 0 44px;
               text-transform: uppercase;
-              font-weight: 600;
+              letter-spacing: 0.04em;
+              padding-top: 1px;
             }
-
-            .callout.good .callout-tag { color: #6ee0a8; }
-            .callout.risk .callout-tag { color: #e0a86e; }
 
             .callout-text {
-              font-size: 12px;
-              line-height: 1.5;
-              color: #a8a299;
+              color: var(--ink-2);
+              flex: 1;
             }
 
-            .variation-formula {
+            .model-formula {
               font-family: 'JetBrains Mono', monospace;
               font-size: 11px;
-              color: #6a6a7e;
-              padding-top: 10px;
-              border-top: 1px solid #1e1e2e;
-              display: flex;
-              align-items: center;
-              gap: 8px;
+              color: var(--ink-3);
+              margin-top: auto;
+              padding-top: 16px;
+              border-top: 1px solid var(--border);
+              word-break: break-word;
+              line-height: 1.5;
             }
 
-            .formula-tag {
-              font-size: 9px;
-              letter-spacing: 0.12em;
+            /* ─── Baseline strip ─────────────────────────────────── */
+            .baseline {
+              margin-top: 12px;
+              background: var(--surface-2);
+              border: 1px solid var(--border);
+              border-radius: 14px;
+              padding: 16px 24px;
+              display: grid;
+              grid-template-columns: auto 1fr auto auto;
+              gap: 18px;
+              align-items: baseline;
+            }
+
+            @media (max-width: 720px) {
+              .baseline { grid-template-columns: 1fr; gap: 6px; padding: 16px; }
+            }
+
+            .baseline-tag {
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 11px;
+              color: var(--ink-3);
+              font-weight: 500;
               text-transform: uppercase;
-              color: #4a4a5e;
-              background: #1e1e2e;
-              padding: 1px 6px;
-              border-radius: 3px;
+              letter-spacing: 0.06em;
+            }
+
+            .baseline-name {
+              font-size: 14px;
+              color: var(--ink-2);
+              font-weight: 500;
+            }
+
+            .baseline-formula {
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 11px;
+              color: var(--ink-3);
+            }
+
+            .baseline-total {
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 14px;
+              font-weight: 500;
+              color: var(--ink);
+              font-variant-numeric: tabular-nums lining-nums;
+            }
+
+            /* ─── Footer ─────────────────────────────────── */
+            .footer {
+              margin-top: 64px;
+              padding-top: 24px;
+              border-top: 1px solid var(--border);
+              font-size: 12px;
+              color: var(--ink-4);
+              text-align: center;
             }
           `}</style>
 
-          <div className="app">
-            <div className="header">
-              <div className="header-eyebrow">Pricing Model Explorer</div>
-              <h1 className="header-title">License <span>Formula</span><br />Sandbox</h1>
-            </div>
+          <main className="page">
+
+            <header className="header">
+              <div className="header-meta">License pricing · sandbox</div>
+              <h1 className="header-title">Tune the formula, watch the total move.</h1>
+              <p className="header-sub">Pick plugins, set seats, term, and discount exponents — three pricing models recompute live.</p>
+            </header>
 
             <div className="grid">
-              {/* Plugins */}
-              <div className="card">
-                <div className="card-title">Plugin Selection</div>
-                <div className="plugin-selector">
-                  {pluginList.map((pl, i) => {
-                    const selected = p.selectedPlugins
-                      ? p.selectedPlugins.includes(i)
-                      : i < p.nPlugins;
-                    return (
-                      <div
-                        key={i}
-                        className={`plugin-chip ${selected ? "active" : ""}`}
-                        onClick={() => {
-                          const current = p.selectedPlugins ?? pluginList.map((_, j) => j < p.nPlugins ? j : -1).filter(j => j >= 0);
-                          const next = current.includes(i)
-                            ? current.filter(x => x !== i)
-                            : [...current, i];
-                          const prices = next.map(idx => pluginList[idx].price);
-                          setP(prev => ({
-                            ...prev,
-                            selectedPlugins: next,
-                            nPlugins: next.length || 1,
-                            pluginPrices: prices.length ? prices : [0],
-                          }));
-                        }}
+
+              {/* ─── Configuration ─────────────────────────────────── */}
+              <div className="col-config">
+
+                <Section label="Region">
+                  <div className="region-list">
+                    {REGIONS.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        className={`region-option ${p.regionId === r.id ? "active" : ""}`}
+                        onClick={() => setP(prev => ({ ...prev, regionId: r.id }))}
                       >
-                        <span className="plugin-chip-name">{pl.name}</span>
-                        <span className="plugin-chip-price">${pl.price}/mo</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Seats & Duration */}
-              <div className="card">
-                <div className="card-title">Seats & Duration</div>
-                <SliderRow
-                  label="Number of Seats"
-                  value={p.nSeats}
-                  min={1} max={50} step={1}
-                  onChange={update("nSeats")}
-                />
-                <SliderRow
-                  label="License Duration"
-                  value={p.durationDays}
-                  min={30} max={1095} step={1}
-                  onChange={update("durationDays")}
-                  format={(v) => v >= 365 ? `${(v / 365).toFixed(1)}yr` : `${v}d`}
-                />
-              </div>
-
-              {/* Exponents */}
-              <div className="card">
-                <div className="card-title">Scaling Exponents</div>
-                <SliderRow
-                  label="α — Plugin count scaling"
-                  value={p.alpha}
-                  min={0.7} max={1.0} step={0.01}
-                  onChange={update("alpha")}
-                  format={(v) => v.toFixed(2)}
-                  meta={`${((1 - p.alpha) * 100).toFixed(0)}% off`}
-                  hint="1.0 = no bulk discount · lower = steeper discount on extra plugins"
-                />
-                <SliderRow
-                  label="β — Seat scaling"
-                  value={p.beta}
-                  min={0.7} max={1.0} step={0.01}
-                  onChange={update("beta")}
-                  format={(v) => v.toFixed(2)}
-                  meta={`${((1 - p.beta) * 100).toFixed(0)}% off`}
-                  hint="1.0 = linear · lower = steeper discount per added seat"
-                />
-                <SliderRow
-                  label="γ — Duration scaling"
-                  value={p.gamma}
-                  min={0.7} max={1.0} step={0.01}
-                  onChange={update("gamma")}
-                  format={(v) => v.toFixed(2)}
-                  meta={`${((1 - p.gamma) * 100).toFixed(0)}% off`}
-                  hint="1.0 = linear · lower = steeper discount on longer terms"
-                />
-              </div>
-
-              {/* Loyalty */}
-              <div className="card">
-                <div className="card-title">Loyalty Discount</div>
-                <SliderRow
-                  label="Discount Rate"
-                  value={p.loyaltyDiscount}
-                  min={0} max={0.5} step={0.01}
-                  onChange={update("loyaltyDiscount")}
-                  format={(v) => `${(v * 100).toFixed(0)}%`}
-                  hint="Applied if existing license holder"
-                />
-                <div className="toggle-row">
-                  <span className="toggle-label">Existing license holder</span>
-                  <div
-                    className={`toggle ${p.isExisting ? "on" : ""}`}
-                    onClick={() => setP(prev => ({ ...prev, isExisting: !prev.isExisting }))}
-                  >
-                    <div className="toggle-knob" />
+                        <span className="region-option-name">{r.name}</span>
+                        <span className="region-option-rate">×{r.multiplier.toFixed(2)}</span>
+                      </button>
+                    ))}
                   </div>
-                </div>
+                </Section>
+
+                <Section label="Plugins" hint={`${p.nPlugins} selected`}>
+                  <div className="plugin-list">
+                    {pluginList.map((pl, i) => {
+                      const selected = p.selectedPlugins
+                        ? p.selectedPlugins.includes(i)
+                        : i < p.nPlugins;
+                      return (
+                        <div
+                          key={i}
+                          className={`plugin-chip ${selected ? "active" : ""}`}
+                          onClick={() => {
+                            const current = p.selectedPlugins ?? pluginList.map((_, j) => j < p.nPlugins ? j : -1).filter(j => j >= 0);
+                            const next = current.includes(i)
+                              ? current.filter(x => x !== i)
+                              : [...current, i];
+                            const prices = next.map(idx => pluginList[idx].price);
+                            setP(prev => ({
+                              ...prev,
+                              selectedPlugins: next,
+                              nPlugins: next.length || 1,
+                              pluginPrices: prices.length ? prices : [0],
+                            }));
+                          }}
+                        >
+                          <span className="plugin-chip-name">{pl.name}</span>
+                          <span className="plugin-chip-price">${pl.price}/mo</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Section>
+
+                <Section label="Seats and duration">
+                  <SliderRow
+                    label="Seats"
+                    value={p.nSeats}
+                    {...RANGES.seats}
+                    onChange={update("nSeats")}
+                  />
+                  <SliderRow
+                    label="License duration"
+                    value={p.durationDays}
+                    {...RANGES.duration}
+                    onChange={update("durationDays")}
+                    format={(v) => v >= DAYS_PER_YEAR ? `${(v / DAYS_PER_YEAR).toFixed(1)} yr` : `${v} d`}
+                  />
+                </Section>
+
+                <Section label="Scaling exponents" hint="1.0 = linear; lower = steeper discount">
+                  <SliderRow
+                    label="α  Plugins"
+                    value={p.alpha}
+                    {...RANGES.exponent}
+                    onChange={update("alpha")}
+                    format={(v) => v.toFixed(2)}
+                    meta={`${((1 - p.alpha) * 100).toFixed(0)}% off`}
+                  />
+                  <SliderRow
+                    label="β  Seats"
+                    value={p.beta}
+                    {...RANGES.exponent}
+                    onChange={update("beta")}
+                    format={(v) => v.toFixed(2)}
+                    meta={`${((1 - p.beta) * 100).toFixed(0)}% off`}
+                  />
+                  <SliderRow
+                    label="γ  Duration"
+                    value={p.gamma}
+                    {...RANGES.exponent}
+                    onChange={update("gamma")}
+                    format={(v) => v.toFixed(2)}
+                    meta={`${((1 - p.gamma) * 100).toFixed(0)}% off`}
+                  />
+                </Section>
+
+                <Section label="Adjustments">
+
+                  <div className="adj-group">
+                    <div className="adj-group-label">Loyalty</div>
+                    <SliderRow
+                      label="Discount rate"
+                      value={p.loyaltyDiscount}
+                      {...RANGES.loyalty}
+                      onChange={update("loyaltyDiscount")}
+                      format={(v) => `${(v * 100).toFixed(0)}%`}
+                      hint="Applied only if customer already holds a license"
+                    />
+                    <div className="toggle-row">
+                      <span className="toggle-label">Existing license holder</span>
+                      <div
+                        className={`toggle ${p.isExisting ? "on" : ""}`}
+                        onClick={() => setP(prev => ({ ...prev, isExisting: !prev.isExisting }))}
+                      >
+                        <div className="toggle-knob" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="adj-group">
+                    <div className="adj-group-label">Integrator</div>
+                    <SliderRow
+                      label="Reseller markup"
+                      value={p.integratorMarkup}
+                      {...RANGES.integrator}
+                      onChange={update("integratorMarkup")}
+                      format={(v) => `+${(v * 100).toFixed(0)}%`}
+                      hint="Surcharge above publisher price"
+                    />
+                  </div>
+
+                </Section>
               </div>
 
-              {/* Result */}
-              <div className="card result-card full-span">
-                <div className="model-selector">
-                  {Object.values(calc.models).map((m) => (
-                    <button
-                      key={m.key}
-                      className={`model-option ${modelKey === m.key ? "active" : ""}`}
-                      onClick={() => setModelKey(m.key)}
-                    >
-                      {m.key}
-                    </button>
-                  ))}
-                </div>
-                <div className="result-price">
-                  <span>$</span>{calc.models[modelKey].total.toFixed(2)}
-                </div>
-                <div className="result-sub">computed license price · {calc.models[modelKey].name}</div>
-                <div className="saving-badge">
-                  vs linear (base × seats × months = ${calc.linearTotal.toFixed(2)}) — {(calc.linearTotal > 0 ? (1 - calc.models[modelKey].total / calc.linearTotal) * 100 : 0).toFixed(1)}% sublinear reduction
-                </div>
-                <FormulaBreakdown
-                  base={calc.base}
-                  model={calc.models[modelKey]}
-                  loyalty={calc.loyalty}
-                  isExisting={p.isExisting}
-                />
-              </div>
+              {/* ─── Result ─────────────────────────────────── */}
+              <aside className="col-result">
+                <div className="result">
 
-              <VariationsCard
-                linearTotal={calc.linearTotal}
-                activeKey={modelKey}
-                onSelect={setModelKey}
-                models={Object.values(calc.models)}
-              />
+                  <div className="result-tabs">
+                    {Object.values(calc.models).map((m) => (
+                      <button
+                        key={m.key}
+                        className={`result-tab ${modelKey === m.key ? "active" : ""}`}
+                        onClick={() => setModelKey(m.key)}
+                      >
+                        {m.key}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="result-label">Publisher total</div>
+                  <div className="result-total">
+                    <span className="currency">$</span>{activeModel.total.toFixed(2)}
+                  </div>
+                  <div className="result-context">
+                    <span className="name">{activeModel.name}</span> · {calc.region.name} · {calc.months.toFixed(1)} mo · {p.nSeats} seats
+                  </div>
+
+                  <div className="result-row customer">
+                    <div className="result-row-label">
+                      Customer pays
+                      <span className="small">+{(calc.integratorMarkup * 100).toFixed(0)}% integrator</span>
+                    </div>
+                    <div className="result-row-val">${customerTotal.toFixed(2)}</div>
+                  </div>
+
+                  <div className="result-row">
+                    <div className="result-row-label">Saving vs. linear</div>
+                    <div className="result-row-val">{savingPct.toFixed(1)}%</div>
+                  </div>
+
+                  <div className="result-row">
+                    <div className="result-row-label">Linear baseline</div>
+                    <div className="result-row-val">${calc.linearTotal.toFixed(2)}</div>
+                  </div>
+
+                  <FormulaBreakdown
+                    base={calc.base}
+                    model={activeModel}
+                    loyalty={calc.loyalty}
+                    isExisting={p.isExisting}
+                  />
+                </div>
+              </aside>
             </div>
-          </div>
+
+            {/* ─── Pricing models ─────────────────────────────────── */}
+            <section className="models">
+              <div className="models-header">
+                <h2 className="models-title">Pricing models</h2>
+                <span className="models-sub">Click to apply</span>
+              </div>
+
+              <div className="models-grid">
+                {Object.values(calc.models).map((m) => (
+                  <ModelCard
+                    key={m.key}
+                    model={m}
+                    linearTotal={calc.linearTotal}
+                    isActive={modelKey === m.key}
+                    onClick={() => setModelKey(m.key)}
+                  />
+                ))}
+              </div>
+
+              <div className="baseline">
+                <span className="baseline-tag">Baseline</span>
+                <span className="baseline-name">Linear (no discount)</span>
+                <span className="baseline-formula">base × seats × months</span>
+                <span className="baseline-total">${calc.linearTotal.toFixed(2)}</span>
+              </div>
+            </section>
+
+          </main>
         </>
       );
     }
