@@ -8,9 +8,17 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+    // Force the classic JSX runtime (React.createElement). The default "automatic"
+    // runtime injects `import { jsx } from "react/jsx-runtime"`, which the browser
+    // rejects in a non-module script ("Cannot use import statement outside a module").
+    Babel.registerPreset("react-classic", {
+      presets: [[Babel.availablePresets.react, { runtime: "classic" }]],
+    });
+  </script>
 </head>
 <body>
   <div id="root"></div>
-  <script type="text/babel" data-presets="react" src="app.jsx?v=2"></script>
+  <script type="text/babel" data-presets="react-classic" src="app.jsx?v=3"></script>
 </body>
 </html>
