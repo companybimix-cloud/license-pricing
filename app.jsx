@@ -1,46 +1,40 @@
 const { useState, useMemo } = React;
 
-const DAYS_PER_MONTH = 30;
 const DAYS_PER_YEAR = 365;
 
 const RANGES = {
-  seats:      { min: 1,   max: 50,   step: 1 },
-  duration:   { min: 30,  max: 1095, step: 1 },
-  discount:   { min: 0.0, max: 0.5,  step: 0.01 },  // δ — discount strength per axis
-  loyalty:    { min: 0,   max: 0.5,  step: 0.01 },
-  integrator: { min: 0,   max: 1.0,  step: 0.01 },
+  discount: { min: 0.0, max: 0.5, step: 0.01 },  // δ — discount strength per axis
 };
 
 const BLEND_WEIGHT = 0.5;
 
-const REGIONS = [
-  { id: "us-ca",       name: "US & Canada",      multiplier: 1.00 },
-  { id: "eu",          name: "Europe",           multiplier: 0.97 },
-  { id: "apac",        name: "Asia-Pacific",     multiplier: 0.94 },
-  { id: "latam",       name: "Latin America",    multiplier: 0.92 },
-  { id: "mena-africa", name: "MENA & Africa",    multiplier: 0.90 },
+// Fixed, selectable tiers.
+const SEAT_OPTIONS = [1, 3, 10, 30, 100];
+const DURATION_OPTIONS = [
+  { label: "1 yr", days: 1 * DAYS_PER_YEAR },
+  { label: "2 yr", days: 2 * DAYS_PER_YEAR },
+  { label: "3 yr", days: 3 * DAYS_PER_YEAR },
+  { label: "5 yr", days: 5 * DAYS_PER_YEAR },
 ];
 
 const DEFAULT = {
-  pluginPrices: [25, 10, 12],
-  nPlugins: 3,
+  nPlugins: 5,
+  selectedPlugins: [0, 1, 2, 3, 4],
+  pluginPrices: [50, 50, 50, 50, 50],
   nSeats: 10,
-  durationDays: 365,
-  dPlugins: 0.05,   // δₚ — bulk discount on plugin axis (0 = none)
+  durationDays: 1 * DAYS_PER_YEAR,
+  dPlugins: 0.05,   // δₚ — bulk discount on product axis (0 = none)
   dSeats:   0.05,   // δₛ — bulk discount on seat axis
   dMonths:  0.02,   // δₘ — bulk discount on duration axis
-  loyaltyDiscount: 0.15,
-  isExisting: false,
-  regionId: "us-ca",
-  integratorMarkup: 0.20,
 };
 
+// Initial products — all editable, all $50.
 const pluginList = [
-  { name: "MECHix Standard", price: 25 },
-  { name: "MEP Opening", price: 10 },
-  { name: "Brand Integrator", price: 12 },
-  { name: "Exporter", price: 12 },
-  { name: "Translator", price: 14 },
+  { name: "ARCH Standard",  price: 50 },
+  { name: "MECH Standard",  price: 50 },
+  { name: "ELEC Standard",  price: 50 },
+  { name: "STRUC Standard", price: 50 },
+  { name: "BIM Standard",   price: 50 },
 ];
 
 const MODEL_TAGLINE = {
@@ -48,6 +42,8 @@ const MODEL_TAGLINE = {
   marginal: "Each additional unit costs slightly less than the last.",
   blend:    "Half linear, half power-law — a safety floor.",
 };
+
+const num = (v) => parseFloat(v) || 0;
 
 function Section({ label, hint, children }) {
   return (
@@ -58,6 +54,24 @@ function Section({ label, hint, children }) {
       </div>
       {children}
     </section>
+  );
+}
+
+function Segmented({ options, value, onChange, ariaLabel }) {
+  return (
+    <div className="segmented" role="group" aria-label={ariaLabel}>
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          className={`segmented-option ${value === opt.value ? "active" : ""}`}
+          aria-pressed={value === opt.value}
+          onClick={() => onChange(opt.value)}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -89,17 +103,17 @@ function SliderRow({ label, value, min, max, step, onChange, format, hint, meta 
   );
 }
 
-function FormulaBreakdown({ base, model, loyalty, isExisting }) {
+function FormulaBreakdown({ base, model }) {
   const fmt = (n) => n.toFixed(4);
   const money = (n) => "$" + n.toFixed(2);
 
   return (
     <div className="breakdown">
       <div className="breakdown-label">Breakdown</div>
-      <div className="breakdown-formula">{model.formula}{isExisting ? " × loyalty" : ""}</div>
+      <div className="breakdown-formula">{model.formula}</div>
       <div className="brows">
         <div className="brow">
-          <span className="brow-label">Base bundle (Σ plugin prices /mo)</span>
+          <span className="brow-label">Base bundle (Σ product prices /yr)</span>
           <span className="brow-leader" />
           <span className="brow-val">{money(base)}</span>
         </div>
@@ -110,13 +124,6 @@ function FormulaBreakdown({ base, model, loyalty, isExisting }) {
             <span className="brow-val">{fmt(m.value)}</span>
           </div>
         ))}
-        {isExisting && (
-          <div className="brow">
-            <span className="brow-label">× Loyalty multiplier</span>
-            <span className="brow-leader" />
-            <span className="brow-val">{fmt(loyalty)}</span>
-          </div>
-        )}
         <div className="brow total">
           <span className="brow-label">Total</span>
           <span className="brow-leader" />
@@ -163,20 +170,44 @@ function App() {
 
   const update = (key) => (val) => setP((prev) => ({ ...prev, [key]: val }));
 
+  // Recompute the active price bundle from a product list + selection.
+  const pricesFor = (list, selected) => selected.map((idx) => num(list[idx].price));
+
+  function togglePlugin(i) {
+    const current = p.selectedPlugins ?? [];
+    const next = current.includes(i)
+      ? current.filter((x) => x !== i)
+      : [...current, i];
+    setP((prev) => ({
+      ...prev,
+      selectedPlugins: next,
+      nPlugins: next.length,
+      pluginPrices: pricesFor(plugins, next),
+    }));
+  }
+
+  function editPrice(i, value) {
+    const next = plugins.map((pl, idx) => (idx === i ? { ...pl, price: value } : pl));
+    setPlugins(next);
+    setP((prev) => ({
+      ...prev,
+      pluginPrices: pricesFor(next, prev.selectedPlugins ?? []),
+    }));
+  }
+
   function addPlugin() {
     const name = draft.name.trim();
     const price = parseFloat(draft.price);
     if (!name || !(price > 0)) return;
     const newIdx = plugins.length;
     const nextPlugins = [...plugins, { name, price }];
-    const current = p.selectedPlugins ?? Array.from({ length: p.nPlugins }, (_, j) => j);
-    const next = [...current, newIdx];
+    const next = [...(p.selectedPlugins ?? []), newIdx];
     setPlugins(nextPlugins);
-    setP(prev => ({
+    setP((prev) => ({
       ...prev,
       selectedPlugins: next,
       nPlugins: next.length,
-      pluginPrices: next.map(idx => nextPlugins[idx].price),
+      pluginPrices: pricesFor(nextPlugins, next),
     }));
     setDraft({ name: "", price: "" });
     setAdding(false);
@@ -188,32 +219,29 @@ function App() {
   }
 
   const calc = useMemo(() => {
-    const region = REGIONS.find(r => r.id === p.regionId) ?? REGIONS[0];
-    const baseRaw = p.pluginPrices.reduce((a, b) => a + b, 0);
-    const base = baseRaw * region.multiplier;
-    const months = p.durationDays / DAYS_PER_MONTH;
-    const loyalty = p.isExisting ? 1 - p.loyaltyDiscount : 1;
+    const base = p.pluginPrices.reduce((a, b) => a + b, 0);
+    const years = p.durationDays / DAYS_PER_YEAR;
     const hasPlugins = p.nPlugins > 0;
 
     // Discount strength → effective exponent on each axis.
-    // (Plugins are already summed in Base, so they only get a -δ "extra" exponent;
-    //  seats and months enter linearly, so their exponent is 1-δ.)
+    // (Products are already summed in Base, so they only get a -δ "extra" exponent;
+    //  seats and years enter linearly, so their exponent is 1-δ.)
     const expPlugins = -p.dPlugins;       // Nₚ^(−δₚ)
     const expSeats   = 1 - p.dSeats;      // Nₛ^(1−δₛ)
     const expMonths  = 1 - p.dMonths;     // M^(1−δₘ)
 
     // When N_p = 0, base is 0 anyway, but Math.pow(0, negative) = Infinity would poison
-    // the products into NaN. Short-circuit the plugin factor to 1 in that case.
+    // the products into NaN. Short-circuit the product factor to 1 in that case.
     const powPlugins = hasPlugins ? Math.pow(p.nPlugins, expPlugins) : 1;
 
     // Model A — Power (multiplicative)
     const fPlugins = powPlugins;
     const gSeats   = Math.pow(p.nSeats, expSeats);
-    const hDuration = Math.pow(months,  expMonths);
-    const total = base * fPlugins * gSeats * hDuration * loyalty;
+    const hDuration = Math.pow(years,  expMonths);
+    const total = base * fPlugins * gSeats * hDuration;
 
     // Linear baseline (all δ = 0 ⇒ Total = base × Nₛ × M)
-    const linearTotal = base * p.nSeats * months;
+    const linearTotal = base * p.nSeats * years;
 
     const sumPow = (N, exp) => {
       let s = 0;
@@ -223,16 +251,16 @@ function App() {
 
     // Model B — Marginal tiered
     const seatsMarg = sumPow(p.nSeats, -p.dSeats);                                      // Σ i^(−δₛ)
-    const monthsMarg = expMonths > 0 ? Math.pow(months, expMonths) / expMonths : months;
+    const yearsMarg = sumPow(years, -p.dMonths);                                        // Σ i^(−δₘ)
     const pluginsMarg = hasPlugins ? sumPow(p.nPlugins, expPlugins) / p.nPlugins : 1;   // (Σ i^(−δₚ))/Nₚ
-    const totalMarginal = base * pluginsMarg * seatsMarg * monthsMarg * loyalty;
+    const totalMarginal = base * pluginsMarg * seatsMarg * yearsMarg;
 
     // Model C — Linear-power blend
     const W = BLEND_WEIGHT;
     const seatsBlend   = W * p.nSeats + (1 - W) * Math.pow(p.nSeats, expSeats);
-    const monthsBlend  = W * months   + (1 - W) * Math.pow(months,   expMonths);
+    const yearsBlend   = W * years    + (1 - W) * Math.pow(years,    expMonths);
     const pluginsBlend = W + (1 - W) * powPlugins;
-    const totalBlend = base * pluginsBlend * seatsBlend * monthsBlend * loyalty;
+    const totalBlend = base * pluginsBlend * seatsBlend * yearsBlend;
 
     const models = {
       power: {
@@ -241,23 +269,23 @@ function App() {
         formula: "Base × Nₚ^(−δₚ) × Nₛ^(1−δₛ) × M^(1−δₘ)",
         total,
         multipliers: [
-          { label: "f(plugins) = Nₚ^(−δₚ)", value: fPlugins },
+          { label: "f(products) = Nₚ^(−δₚ)", value: fPlugins },
           { label: "g(seats) = Nₛ^(1−δₛ)", value: gSeats },
-          { label: "h(months) = M^(1−δₘ)", value: hDuration },
+          { label: "h(years) = M^(1−δₘ)", value: hDuration },
         ],
-        description: "Each lever — plugins, seats, and license length — has its own bulk discount, and the discounts multiply together. A customer who grows on every axis at once gets a deeply compounded deal.",
+        description: "Each lever — products, seats, and license length — has its own bulk discount, and the discounts multiply together. A customer who grows on every axis at once gets a deeply compounded deal.",
         good: "Rewards customers who buy the full package. Marketing-friendly headline savings.",
         risk: "Aggressive tuning can let a big multi-axis order undercut a smaller single-axis one.",
       },
       marginal: {
         key: "marginal",
         name: "Marginal tiered",
-        formula: "Base × avgₚ × Σ i^(−δₛ) × M^(1−δₘ) ⁄ (1−δₘ)",
+        formula: "Base × avgₚ × Σ i^(−δₛ) × Σ i^(−δₘ)",
         total: totalMarginal,
         multipliers: [
-          { label: "plugins avg = (Σ i^(−δₚ))/Nₚ", value: pluginsMarg },
+          { label: "products avg = (Σ i^(−δₚ))/Nₚ", value: pluginsMarg },
           { label: "seats = Σ i^(−δₛ)", value: seatsMarg },
-          { label: "months = M^(1−δₘ) ⁄ (1−δₘ)", value: monthsMarg },
+          { label: "years = Σ i^(−δₘ)", value: yearsMarg },
         ],
         description: "Like a punch card. Each next unit costs a bit less than the one before. Total = sum of per-unit prices, not a flat multiplier.",
         good: "A bigger order always costs more than a smaller one. Easy to defend in a sales conversation.",
@@ -269,9 +297,9 @@ function App() {
         formula: "Base × ½(1 + Nₚ^(−δₚ)) × ½(Nₛ + Nₛ^(1−δₛ)) × ½(M + M^(1−δₘ))",
         total: totalBlend,
         multipliers: [
-          { label: "plugins = ½(1 + Nₚ^(−δₚ))", value: pluginsBlend },
+          { label: "products = ½(1 + Nₚ^(−δₚ))", value: pluginsBlend },
           { label: "seats = ½(Nₛ + Nₛ^(1−δₛ))", value: seatsBlend },
-          { label: "months = ½(M + M^(1−δₘ))", value: monthsBlend },
+          { label: "years = ½(M + M^(1−δₘ))", value: yearsBlend },
         ],
         description: "Splits every price in half. One half scales straight per-unit. The other half gets the full power-law discount. Linear half acts as a safety floor.",
         good: "Most conservative. More units always cost more — zero pricing surprises.",
@@ -280,9 +308,8 @@ function App() {
     };
 
     return {
-      base, baseRaw, region, months, loyalty, linearTotal,
+      base, years, linearTotal,
       fPlugins, gSeats, hDuration, total, totalMarginal, totalBlend,
-      integratorMarkup: p.integratorMarkup,
       models,
     };
   }, [p]);
@@ -291,15 +318,14 @@ function App() {
   const savingPct = calc.linearTotal > 0
     ? ((1 - activeModel.total / calc.linearTotal) * 100)
     : 0;
-  const customerTotal = activeModel.total * (1 + calc.integratorMarkup);
+  const durationYears = p.durationDays / DAYS_PER_YEAR;
 
   return (
     <main className="page">
 
       <header className="header">
-        <div className="header-meta">License pricing · sandbox</div>
-        <h1 className="header-title">Tune the formula, watch the total move.</h1>
-        <p className="header-sub">Pick plugins, set seats, term, and discount exponents — three pricing models recompute live.</p>
+        <div className="header-meta">License pricing · internal tool</div>
+        <h1 className="header-title">Pricing calculator</h1>
       </header>
 
       <div className="grid">
@@ -307,48 +333,35 @@ function App() {
         {/* ─── Configuration ─────────────────────────────────── */}
         <div className="col-config">
 
-          <Section label="Region">
-            <div className="region-list">
-              {REGIONS.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  className={`region-option ${p.regionId === r.id ? "active" : ""}`}
-                  onClick={() => setP(prev => ({ ...prev, regionId: r.id }))}
-                >
-                  <span className="region-option-name">{r.name}</span>
-                  <span className="region-option-rate">×{r.multiplier.toFixed(2)}</span>
-                </button>
-              ))}
-            </div>
-          </Section>
-
-          <Section label="Plugins" hint={`${p.nPlugins} selected`}>
+          <Section label="Products" hint={`${p.nPlugins} selected`}>
             <div className="plugin-list">
               {plugins.map((pl, i) => {
-                const selected = p.selectedPlugins
-                  ? p.selectedPlugins.includes(i)
-                  : i < p.nPlugins;
+                const selected = (p.selectedPlugins ?? []).includes(i);
                 return (
                   <div
                     key={i}
                     className={`plugin-chip ${selected ? "active" : ""}`}
-                    onClick={() => {
-                      const current = p.selectedPlugins ?? Array.from({ length: p.nPlugins }, (_, j) => j);
-                      const next = current.includes(i)
-                        ? current.filter(x => x !== i)
-                        : [...current, i];
-                      const prices = next.map(idx => plugins[idx].price);
-                      setP(prev => ({
-                        ...prev,
-                        selectedPlugins: next,
-                        nPlugins: next.length,
-                        pluginPrices: prices,
-                      }));
-                    }}
+                    onClick={() => togglePlugin(i)}
                   >
                     <span className="plugin-chip-name">{pl.name}</span>
-                    <span className="plugin-chip-price">${pl.price}/mo</span>
+                    <span
+                      className="plugin-chip-price"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="plugin-chip-currency">$</span>
+                      <input
+                        className="plugin-chip-price-input"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={pl.price}
+                        title="Edit price"
+                        aria-label={`${pl.name} price per year`}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => editPrice(i, e.target.value)}
+                      />
+                      <span className="plugin-chip-unit">/yr</span>
+                    </span>
                   </div>
                 );
               })}
@@ -357,7 +370,7 @@ function App() {
                 <div className="plugin-add-form">
                   <input
                     className="plugin-add-name"
-                    placeholder="Plugin name"
+                    placeholder="Product name"
                     value={draft.name}
                     autoFocus
                     onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -384,31 +397,36 @@ function App() {
                 </div>
               ) : (
                 <button type="button" className="plugin-add-trigger" onClick={() => setAdding(true)}>
-                  + Add plugin
+                  + Add product
                 </button>
               )}
             </div>
           </Section>
 
-          <Section label="Seats and duration">
-            <SliderRow
-              label="Seats"
-              value={p.nSeats}
-              {...RANGES.seats}
-              onChange={update("nSeats")}
-            />
-            <SliderRow
-              label="License duration"
-              value={p.durationDays}
-              {...RANGES.duration}
-              onChange={update("durationDays")}
-              format={(v) => v >= DAYS_PER_YEAR ? `${(v / DAYS_PER_YEAR).toFixed(1)} yr` : `${v} d`}
-            />
+          <Section label="Seats & duration">
+            <div className="field">
+              <div className="field-label">Seats</div>
+              <Segmented
+                ariaLabel="Seats"
+                options={SEAT_OPTIONS.map((n) => ({ value: n, label: n }))}
+                value={p.nSeats}
+                onChange={update("nSeats")}
+              />
+            </div>
+            <div className="field">
+              <div className="field-label">License duration</div>
+              <Segmented
+                ariaLabel="License duration"
+                options={DURATION_OPTIONS.map((d) => ({ value: d.days, label: d.label }))}
+                value={p.durationDays}
+                onChange={update("durationDays")}
+              />
+            </div>
           </Section>
 
           <Section label="Bulk discount per axis" hint="0% = linear, higher = steeper discount">
             <SliderRow
-              label="δₚ  Plugins"
+              label="δₚ  Products"
               value={p.dPlugins}
               {...RANGES.discount}
               onChange={update("dPlugins")}
@@ -428,43 +446,6 @@ function App() {
               onChange={update("dMonths")}
               format={(v) => `${(v * 100).toFixed(0)}%`}
             />
-          </Section>
-
-          <Section label="Adjustments">
-
-            <div className="adj-group">
-              <div className="adj-group-label">Loyalty</div>
-              <SliderRow
-                label="Discount rate"
-                value={p.loyaltyDiscount}
-                {...RANGES.loyalty}
-                onChange={update("loyaltyDiscount")}
-                format={(v) => `${(v * 100).toFixed(0)}%`}
-                hint="Applied only if customer already holds a license"
-              />
-              <div className="toggle-row">
-                <span className="toggle-label">Existing license holder</span>
-                <div
-                  className={`toggle ${p.isExisting ? "on" : ""}`}
-                  onClick={() => setP(prev => ({ ...prev, isExisting: !prev.isExisting }))}
-                >
-                  <div className="toggle-knob" />
-                </div>
-              </div>
-            </div>
-
-            <div className="adj-group">
-              <div className="adj-group-label">Integrator</div>
-              <SliderRow
-                label="Reseller markup"
-                value={p.integratorMarkup}
-                {...RANGES.integrator}
-                onChange={update("integratorMarkup")}
-                format={(v) => `+${(v * 100).toFixed(0)}%`}
-                hint="Surcharge above publisher price"
-              />
-            </div>
-
           </Section>
         </div>
 
@@ -489,15 +470,7 @@ function App() {
               <span className="currency">$</span>{activeModel.total.toFixed(2)}
             </div>
             <div className="result-context">
-              <span className="name">{activeModel.name}</span> · {calc.region.name} · {calc.months.toFixed(1)} mo · {p.nSeats} seats
-            </div>
-
-            <div className="result-row customer">
-              <div className="result-row-label">
-                Customer pays
-                <span className="small">+{(calc.integratorMarkup * 100).toFixed(0)}% integrator</span>
-              </div>
-              <div className="result-row-val">${customerTotal.toFixed(2)}</div>
+              <span className="name">{activeModel.name}</span> · {durationYears} yr · {p.nSeats} seats
             </div>
 
             <div className="result-row">
@@ -513,8 +486,6 @@ function App() {
             <FormulaBreakdown
               base={calc.base}
               model={activeModel}
-              loyalty={calc.loyalty}
-              isExisting={p.isExisting}
             />
           </div>
         </aside>
@@ -542,7 +513,7 @@ function App() {
         <div className="baseline">
           <span className="baseline-tag">Baseline</span>
           <span className="baseline-name">Linear (no discount)</span>
-          <span className="baseline-formula">base × seats × months</span>
+          <span className="baseline-formula">base × seats × years</span>
           <span className="baseline-total">${calc.linearTotal.toFixed(2)}</span>
         </div>
       </section>

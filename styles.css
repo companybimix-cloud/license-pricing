@@ -42,7 +42,7 @@ body { min-height: 100vh; }
 
 /* ─── Header ─────────────────────────────────── */
 .header {
-  margin-bottom: 64px;
+  margin-bottom: 44px;
   max-width: 640px;
 }
 
@@ -52,23 +52,15 @@ body { min-height: 100vh; }
   letter-spacing: 0.06em;
   color: var(--ink-3);
   text-transform: uppercase;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .header-title {
-  font-size: clamp(28px, 4vw, 36px);
+  font-size: 20px;
   font-weight: 500;
-  letter-spacing: -0.025em;
-  line-height: 1.15;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
   color: var(--ink);
-  margin-bottom: 8px;
-}
-
-.header-sub {
-  font-size: 16px;
-  font-weight: 400;
-  color: var(--ink-3);
-  line-height: 1.55;
 }
 
 /* ─── Layout grid ─────────────────────────────────── */
@@ -110,48 +102,48 @@ body { min-height: 100vh; }
   font-weight: 400;
 }
 
-/* ─── Region ─────────────────────────────────── */
-.region-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
-  gap: 6px;
+/* ─── Field + segmented control ─────────────────────────────────── */
+.field {
+  margin-bottom: 22px;
+}
+.field:last-child { margin-bottom: 4px; }
+
+.field-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 10px;
 }
 
-.region-option {
+.segmented {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.segmented-option {
+  flex: 1 1 0;
+  min-width: 52px;
+  padding: 9px 8px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
   cursor: pointer;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-family: inherit;
-  transition: border-color 0.15s, background 0.15s;
-  color: var(--ink);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
-.region-option:hover { border-color: var(--ink-4); }
+.segmented-option:hover { border-color: var(--ink-4); }
 
-.region-option.active {
+.segmented-option.active {
   background: var(--ink);
   border-color: var(--ink);
   color: var(--bg);
 }
-
-.region-option-name {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.region-option-rate {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--ink-3);
-}
-
-.region-option.active .region-option-rate { color: var(--ink-4); }
 
 /* ─── Plugins ─────────────────────────────────── */
 .plugin-list {
@@ -188,12 +180,59 @@ body { min-height: 100vh; }
 }
 
 .plugin-chip-price {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   color: var(--ink-3);
 }
 
-.plugin-chip.active .plugin-chip-price { color: var(--ink-4); }
+.plugin-chip-currency,
+.plugin-chip-unit { color: var(--ink-4); }
+
+.plugin-chip-price-input {
+  width: 42px;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  text-align: right;
+  padding: 2px 3px;
+  border-radius: 4px;
+  cursor: text;
+  font-variant-numeric: tabular-nums lining-nums;
+  -moz-appearance: textfield;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+
+.plugin-chip-price-input::-webkit-inner-spin-button,
+.plugin-chip-price-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.plugin-chip-price-input:hover { background: var(--soft); }
+.plugin-chip-price-input:focus {
+  background: var(--soft);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+/* Active (ink) chip — flip the price colors for contrast */
+.plugin-chip.active .plugin-chip-price,
+.plugin-chip.active .plugin-chip-currency,
+.plugin-chip.active .plugin-chip-unit { color: var(--ink-4); }
+
+.plugin-chip.active .plugin-chip-price-input { color: var(--bg); }
+
+.plugin-chip.active .plugin-chip-price-input:hover,
+.plugin-chip.active .plugin-chip-price-input:focus {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
 
 .plugin-add-trigger {
   display: block;
@@ -379,62 +418,6 @@ body { min-height: 100vh; }
   margin-top: 6px;
   line-height: 1.45;
 }
-
-/* ─── Adjustments groups ─────────────────────────────────── */
-.adj-group {
-  margin-bottom: 24px;
-}
-.adj-group:last-child { margin-bottom: 0; }
-
-.adj-group-label {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-3);
-  margin-bottom: 12px;
-}
-
-.toggle-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 0 0;
-  margin-top: 4px;
-}
-
-.toggle-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ink);
-}
-
-.toggle {
-  width: 36px;
-  height: 20px;
-  background: var(--border-strong);
-  border-radius: 10px;
-  position: relative;
-  cursor: pointer;
-  transition: background 0.2s;
-  flex: 0 0 auto;
-}
-
-.toggle.on { background: var(--ink); }
-
-.toggle-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background: var(--bg);
-  border-radius: 50%;
-  transition: transform 0.2s;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-.toggle.on .toggle-knob { transform: translateX(16px); }
 
 /* ─── Result card ─────────────────────────────────── */
 .result {
