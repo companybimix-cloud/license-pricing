@@ -2,9 +2,9 @@ const { useState } = React;
 
 // Fixed, sellable bundles. Each option carries its own flat discount (no graduated tiers) —
 // mirrors the backend Commerce:Pricing model: a per-bundle seat discount and a per-term discount.
-const SEAT_OPTIONS = [1, 5, 10, 30, 100];
+const SEAT_OPTIONS = [1, 3, 10, 30, 100];
 const TERM_OPTIONS = [1, 2, 3, 5];
-const DEFAULT_SEAT_DISC = { 1: 0, 5: 5, 10: 10, 30: 15, 100: 20 };
+const DEFAULT_SEAT_DISC = { 1: 0, 3: 5, 10: 10, 30: 15, 100: 20 };
 const DEFAULT_TERM_DISC = { 1: 0, 2: 10, 3: 15, 5: 20 };
 
 // Products are LINEAR: base = Σ of the named items' annual per-seat prices. A multi-product
