@@ -1,11 +1,29 @@
 const { useState } = React;
 
-// Fixed, sellable bundles. Each option carries its own flat discount (no graduated tiers) —
-// mirrors the backend Commerce:Pricing model: a per-bundle seat discount and a per-term discount.
-const SEAT_OPTIONS = [1, 3, 10, 30, 100];
+// Mirrors the backend Commerce:Pricing model. Seats and terms are NOT the same shape, and that is
+// the whole reason this file is not two copies of one component:
+//
+//   - SEATS are an OPEN range with tier breakpoints. Any count from 1 to MAX_SEATS is sellable;
+//     the whole quantity is charged at the tier with the greatest minSeats <= seats. An earlier
+//     version of this calculator offered five fixed bundles and looked the discount up by exact
+//     key, which priced 5 of the 10,000 sellable counts and quietly refused the rest.
+//   - TERMS are a CLOSED set. A term absent from this table is refused outright at checkout with
+//     TermNotSellable, so chips are the honest control here.
+const SEAT_TIERS = [
+  { minSeats: 1,   discount: 0 },
+  { minSeats: 3,   discount: 5 },
+  { minSeats: 10,  discount: 10 },
+  { minSeats: 30,  discount: 15 },
+  { minSeats: 100, discount: 20 },
+];
+const MAX_SEATS = 10000; // CheckoutRequestValidator's upper bound.
 const TERM_OPTIONS = [1, 2, 3, 5];
-const DEFAULT_SEAT_DISC = { 1: 0, 3: 5, 10: 10, 30: 15, 100: 20 };
 const DEFAULT_TERM_DISC = { 1: 0, 2: 10, 3: 15, 5: 20 };
+
+// The tier a seat count lands in: greatest minSeats <= seats. Validation guarantees a minSeats === 1
+// tier, so for seats >= 1 this always matches — the `?? tiers[0]` is a floor for a hand-edited table.
+const tierFor = (seats, tiers) =>
+  tiers.filter((t) => t.minSeats <= seats).sort((a, b) => b.minSeats - a.minSeats)[0] ?? tiers[0];
 
 // Products are LINEAR: base = Σ of the named items' annual per-seat prices. A multi-product
 // discount is expressed by pricing a PACKAGE below the sum of its members (a curated bundle SKU).
@@ -21,6 +39,7 @@ const num = (v) => parseFloat(v) || 0;
 const money = (n) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const money0 = (n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const clampPct = (v) => Math.min(95, Math.max(0, Math.round(num(v))));
+const clampSeats = (v) => Math.min(MAX_SEATS, Math.max(1, Math.round(num(v)) || 1));
 
 function Stepper({ value, onChange }) {
   return (
@@ -33,7 +52,8 @@ function Stepper({ value, onChange }) {
   );
 }
 
-// A fixed set of options, each carrying a flat discount shown on the chip. Used for seats + terms.
+// A CLOSED set of options, each carrying a flat discount shown on the chip. Terms only — seats are
+// an open range and use SeatTierGroup below.
 function OptionGroup({ variant, title, hint, options, discounts, selected, onSelect, onDiscount, unit }) {
   const disc = discounts[selected] || 0;
   return (
@@ -59,20 +79,67 @@ function OptionGroup({ variant, title, hint, options, discounts, selected, onSel
   );
 }
 
+// Seats: a free count plus the tier breakpoints. The chips are NOT a choice of what to buy — they
+// are where the discount steps — so clicking one jumps the count to that breakpoint, and the chip
+// that lights up is the tier the current count LANDS IN, not the one last clicked. Type 7 and the
+// "3+" chip lights: that is the whole behaviour the old five-bundle version could not show.
+function SeatTierGroup({ seats, tiers, onSeats, onDiscount }) {
+  const active = tierFor(seats, tiers);
+  return (
+    <section className="sec">
+      <div className="sec-h">
+        <span className="t">Seats</span>
+        <span className="hint">volume tiers · any count 1–{MAX_SEATS.toLocaleString("en-US")}</span>
+      </div>
+
+      <div className="seat-count">
+        <input className="seat-in mono" type="number" min="1" max={MAX_SEATS} value={seats}
+          onChange={(e) => onSeats(clampSeats(e.target.value))} aria-label="Seat count" />
+        <span className="seat-un">{seats === 1 ? "seat" : "seats"}</span>
+      </div>
+
+      <div className="opts seats">
+        {tiers.map((t) => (
+          <div key={t.minSeats} className={`opt ${active.minSeats === t.minSeats ? "on" : ""}`}
+            onClick={() => onSeats(t.minSeats)}>
+            <div className="big">{t.minSeats}+</div>
+            <div className="unit">{t.minSeats === 1 ? "seat" : "seats"}</div>
+            <div className={`pct ${t.discount === 0 ? "zero" : ""}`}>
+              {t.discount === 0 ? "full price" : `−${t.discount}%`}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="opt-edit">
+        <span className="lab"><b>{active.minSeats}+</b> seats · discount</span>
+        <Stepper value={active.discount} onChange={(v) => onDiscount(active.minSeats, v)} />
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const [products, setProducts] = useState(INITIAL_PRODUCTS);
   const [seats, setSeats] = useState(30);
   const [years, setYears] = useState(3);
-  const [seatDisc, setSeatDisc] = useState(DEFAULT_SEAT_DISC);
+  const [seatTiers, setSeatTiers] = useState(SEAT_TIERS);
   const [termDisc, setTermDisc] = useState(DEFAULT_TERM_DISC);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ name: "", price: "" });
 
   const base = products.reduce((a, p) => a + (p.on ? num(p.price) : 0), 0);
-  const sd = (seatDisc[seats] || 0) / 100;
+  const tier = tierFor(seats, seatTiers);
+  const sd = tier.discount / 100;
   const td = (termDisc[years] || 0) / 100;
-  const annual = base * seats * (1 - sd);
-  const total = annual * years * (1 - td);
+
+  // Computed in CENTS and rounded once at the end, because that is what the backend does:
+  // AnnualPricePerSeatCents is an integer column, and OrderPricingService rounds the single product
+  // away from zero. For a positive total JS's Math.round (half up) IS away-from-zero, so the two
+  // agree to the cent — which is the only reason a calculator that quotes a customer is worth having.
+  const baseCents = Math.round(base * 100);
+  const annual = Math.round(baseCents * seats * (1 - sd)) / 100;
+  const total = Math.round(baseCents * seats * (1 - sd) * years * (1 - td)) / 100;
   const linear = base * seats * years;
   const saving = linear > 0 ? (1 - total / linear) * 100 : 0;
   const selectedCount = products.filter((p) => p.on).length;
@@ -94,7 +161,7 @@ function App() {
       <header className="head">
         <div className="kicker">License pricing · set-discount model</div>
         <h1>Pricing calculator</h1>
-        <div className="note">Seats and duration are each a fixed set of options, and every option carries its own flat discount right on the chip. Products are linear — bundle by pricing a package below its members.</div>
+        <div className="note">Seats are an open range with tier breakpoints — any count is sellable, and the whole quantity is charged at the tier it reaches. Duration is a closed set of sellable terms, each with a flat discount. Products are linear — bundle by pricing a package below its members.</div>
       </header>
 
       <div className="grid">
@@ -131,10 +198,9 @@ function App() {
             <div className="base-line"><span>Base bundle · per seat · year</span><b>{money(base)}</b></div>
           </section>
 
-          <OptionGroup variant="seats" title="Seats" hint="volume discount per bundle"
-            options={SEAT_OPTIONS} discounts={seatDisc} selected={seats}
-            onSelect={setSeats} onDiscount={(k, v) => setSeatDisc((d) => ({ ...d, [k]: v }))}
-            unit={(v) => (v === 1 ? "seat" : "seats")} />
+          <SeatTierGroup seats={seats} tiers={seatTiers} onSeats={setSeats}
+            onDiscount={(minSeats, v) =>
+              setSeatTiers((ts) => ts.map((t) => (t.minSeats === minSeats ? { ...t, discount: v } : t)))} />
 
           <OptionGroup variant="terms" title="Duration" hint="discount per term"
             options={TERM_OPTIONS} discounts={termDisc} selected={years}
@@ -146,11 +212,11 @@ function App() {
           <div className="result">
             <div className="rl">Order total</div>
             <div className="total"><span className="cur">$</span>{money0(total)}</div>
-            <div className="ctx">{years} yr · {seats} seats · {selectedCount} products</div>
+            <div className="ctx">{years} yr · {seats} {seats === 1 ? "seat" : "seats"} · {selectedCount} products</div>
 
             <div className="row save"><span className="k">Saving vs. linear</span><span className="v">{saving.toFixed(1)}%</span></div>
             <div className="row"><span className="k">Linear baseline</span><span className="v">{money(linear)}</span></div>
-            <div className="row"><span className="k">Seat discount</span><span className="v">{(sd * 100).toFixed(0)}%</span></div>
+            <div className="row"><span className="k">Seat tier</span><span className="v">{tier.minSeats}+ · {(sd * 100).toFixed(0)}%</span></div>
             <div className="row"><span className="k">Term discount</span><span className="v">{(td * 100).toFixed(0)}%</span></div>
 
             <div className="bd">
@@ -168,7 +234,7 @@ function App() {
         </aside>
       </div>
 
-      <div className="foot">Set discounts · fixed seat &amp; term bundles, a flat discount each. Products linear (bundle via package price).</div>
+      <div className="foot">Set discounts · volume seat tiers (open range) &amp; fixed terms (closed set). Products linear (bundle via package price). Mirrors <code>Commerce:Pricing</code> + <code>OrderPricingService</code>.</div>
     </main>
   );
 }

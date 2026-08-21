@@ -63,7 +63,13 @@ html,body{background:var(--bg);color:var(--ink);font-family:var(--font-sans);fon
 .base-line{display:flex;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:13px;color:var(--ink-3)}
 .base-line b{color:var(--ink);font-family:var(--font-mono);font-weight:600}
 
-/* Option chips (shared by seats + duration) — each embeds its discount */
+/* Option chips (duration; also the seat-tier breakpoints) — each embeds its discount */
+/* Seats are an open range, so the count is typed and the chips below are the tier breakpoints it
+   lands in — see SeatTierGroup. Terms keep the plain chip group; they are a closed set. */
+.seat-count{display:flex;align-items:baseline;gap:8px;margin-bottom:12px;padding:10px 14px;background:var(--surface-2);border-radius:10px}
+.seat-in{width:104px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--ink);font-size:19px;font-weight:600;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.seat-in:focus{outline:2px solid var(--ink);outline-offset:1px}
+.seat-un{font-size:13px;color:var(--ink-3)}
 .opts{display:grid;gap:8px}
 .opts.seats{grid-template-columns:repeat(5,1fr)}
 .opts.terms{grid-template-columns:repeat(4,1fr)}
